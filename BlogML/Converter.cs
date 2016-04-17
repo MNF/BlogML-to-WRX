@@ -1,11 +1,13 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Text;
 using System.Xml;
 using System.Xml.Linq;
 using System.Xml.Serialization;
+using Common;
 
 namespace BlogML.Helper.BlogML
 {
@@ -152,10 +154,7 @@ namespace BlogML.Helper.BlogML
         private static void WriteWXRDocument(BlogML.blogType blogData, string baseUrl, string fileName)
         {
             BlogML.categoryType currCategory;
-            BlogML.categoryRefType currCatRef;
-            string categoryName;
-            BlogML.commentType currComment;
-            BlogML.postType currPost;
+
             XmlTextWriter writer = new XmlTextWriter(fileName, new UTF8Encoding(false));
             writer.Formatting = Formatting.Indented;
 
@@ -209,8 +208,28 @@ namespace BlogML.Helper.BlogML
             // TODO: Swap code so that all posts are processed, not just first 5.
             for (int i = 0; i <= blogData.posts.Length - 1; i++)
             {
-                currPost = blogData.posts[i];
+                string postXml=WritePost(blogData.posts[i], blogData, baseUrl);
+                writer.WriteRaw(postXml);
+            }
 
+            writer.WriteEndElement(); // channel
+            writer.WriteEndElement(); // rss
+
+            writer.Flush();
+            writer.Close();
+        }
+
+        private static string WritePost(postType currPost, blogType blogData, string baseUrl)
+        {
+            try
+            {
+                var memoryStream = new MemoryStream();
+                var writer = new XmlTextWriter(memoryStream, Encoding.Unicode);
+                writer.Formatting = Formatting.Indented;
+                BlogML.categoryRefType currCatRef;
+                string categoryName;
+                BlogML.commentType currComment;
+  
 
                 writer.WriteStartElement("item");
                 writer.WriteElementString("title", string.Join(" ", currPost.title.Text));
@@ -244,7 +263,18 @@ namespace BlogML.Helper.BlogML
                 writer.WriteEndElement(); // guid
                 writer.WriteElementString("description", ".");
                 writer.WriteStartElement("content:encoded");
-                writer.WriteCData(currPost.content.Value);
+                var content = currPost.content.Value;
+                var startCdata = "<![CDATA[";//"&amp;lt;![CDATA[";
+                if (!String.IsNullOrEmpty(content) && content.Contains(startCdata))
+                {
+                   // content = content.Replace(startCdata, "<!-- &amp;lt;![CDATA[ -->");
+                   // content = content.Replace("]]&amp;", "<!-- ]]&amp; -->");
+                    content = content.Replace(startCdata, "<!-- <![CDATA-[ -->");
+                    content = content.Replace("]]>", "<!-- ]]-> -->");
+                    Console.WriteLine("In post " + currPost.id + " " + currPost.posturl + " replaced  <![CDATA[  and ]]> with comment ");
+   
+                }
+                writer.WriteCData(content);
                 writer.WriteEndElement(); // content:encoded
                 writer.WriteElementString("wp:post_id", currPost.id);
                 writer.WriteElementString("wp:post_date", currPost.datecreated.ToString("yyyy-MM-dd HH:mm:ss"));
@@ -266,6 +296,10 @@ namespace BlogML.Helper.BlogML
                     {
                         currComment = currPost.comments[k];
                         writer.WriteStartElement("wp:comment");
+                        // currComment.id="http://geekswithblogs.net/mnf/archive/2016/02/17/scrolltocontrol-helper-method-for-asp.net-web-forms-to-move-position.aspx#648420";
+                        //extract after #
+                        var commentId = currComment.id.RightAfter("#");
+                        writer.WriteElementString("wp:comment_id", commentId);
                         writer.WriteElementString("wp:comment_date", currComment.datecreated.ToString("yyyy-MM-dd HH:mm:ss"));
                         writer.WriteElementString("wp:comment_date_gmt", currComment.datecreated.ToString("yyyy-MM-dd HH:mm:ss"));
                         writer.WriteStartElement("wp:comment_author");
@@ -282,7 +316,11 @@ namespace BlogML.Helper.BlogML
                         writer.WriteElementString("wp:comment_author_url", currComment.userurl);
                         writer.WriteElementString("wp:comment_type", " ");
                         writer.WriteStartElement("wp:comment_content");
-                        writer.WriteCData(currComment.content.Value);
+                        var commentContent = currComment.content.Value;
+                        //Import stripped  <p> and <br> html tags in comments, but keeps new lines  
+                        commentContent=commentContent.Replace("</p>", Environment.NewLine);
+                        commentContent=commentContent.Replace("<br />", Environment.NewLine);
+                        writer.WriteCData(commentContent);
                         writer.WriteEndElement(); // wp:comment_content
 
                         if (currComment.approved)
@@ -294,34 +332,55 @@ namespace BlogML.Helper.BlogML
                             writer.WriteElementString("wp:comment_approved", null, "0");
                         }
 
-                        writer.WriteElementString("wp", "comment_parent", null, "0");
+                        //writer.WriteElementString("wp", "comment_parent", null, "0");
+                        writer.WriteElementString("wp:comment_parent", null, "0");
                         writer.WriteEndElement(); // wp:comment
                     }
                 }
 
                 writer.WriteEndElement(); // item
+                writer.Flush();
+            //http://stackoverflow.com/questions/78181/how-do-you-get-a-string-from-a-memorystream
+                memoryStream.Position = 0;
+                var sr = new StreamReader(memoryStream);
+                var xmlString = sr.ReadToEnd();
+                return xmlString;
             }
-
-            writer.WriteEndElement(); // channel
-            writer.WriteEndElement(); // rss
-
-            writer.Flush();
-            writer.Close();
+            catch (Exception exc)
+            {
+                Console.WriteLine("Trying to save " + currPost.id + " " + currPost.posturl + " error: " +exc.ToString());
+                return "";
+            }
         }
 
         private static string GetCategoryById(BlogML.blogType BlogData, string CategoryId)
         {
             string results = "none";
-
+            bool found = false;
+            //try to find by ID
             for (int i = 0; i <= BlogData.categories.Length - 1; i++)
             {
                 if (BlogData.categories[i].id == CategoryId)
                 {
                     results = String.Join(" ", BlogData.categories[i].title.Text);
+                    found= true;
                     break;
                 }
             }
-
+            if (!found)
+            {
+                //try to find by description
+                for (int i = 0; i <= BlogData.categories.Length - 1; i++)
+                {
+                    if (BlogData.categories[i].description == CategoryId)
+                    {
+                        results = String.Join(" ", BlogData.categories[i].title.Text);
+                        found = true;
+                        break;
+                    }
+                }
+            }
+            Debug.Assert(found, CategoryId);
             return results;
         }
         private static string SafeUrl(string url)

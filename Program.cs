@@ -5,6 +5,7 @@ using System.Linq;
 using System.Net;
 using System.Xml.Linq;
 using BlogML.Helper.BlogML;
+using CsUtilities;
 
 namespace BlogML.Helper
 {
@@ -14,11 +15,15 @@ namespace BlogML.Helper
 
         static void Main(string[] args)
         {
+            ConsoleCopy consoleLog = null;
             try
             {
+          
                 //Parse and create settings
                 Setting setting = ParseInput(args);
-
+                      //var folderPath ="c:\temp\"
+                string logPath = String.Format("ConsoleLog-{0}-{1}.log", setting.ToolAction,DateTime.Now.ToString("yyyy-MM-dd-HH-mm-ss"));
+                 consoleLog = new CsUtilities.ConsoleCopy(logPath);
                 //Check if action is present
                 if (setting.ToolAction == ToolAction.Unknown)
                 {
@@ -40,7 +45,7 @@ namespace BlogML.Helper
                         if (RequiredParametersPrintUsage(ToolAction.ExportToWRX, args))
                         {
                             string wrxFileName = BlogMLToWRXConverter.GenerateWRXFile(setting.BlogMLFileName);
-                            Console.WriteLine("Successfully created WRX format");
+                            Console.WriteLine("Created WRX format");
 
                             //Generate ReDirect, SourceQA and TargetQA File
                             BlogMLToWRXConverter.GenerateHelperFiles(setting.SourceBaseUrl, setting.TargetBaseUrl, wrxFileName);
@@ -76,6 +81,7 @@ namespace BlogML.Helper
                 Console.WriteLine();
                 PringUsage();
             }
+            if(consoleLog!=null)consoleLog.Dispose();
         }
 
         private static void RemoveAllComments(string fileName)
