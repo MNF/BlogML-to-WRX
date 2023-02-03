@@ -13,8 +13,24 @@ namespace BlogML.Helper.BlogML
 {
     class BlogMLToWRXConverter
     {
-        internal static string GenerateWRXFile(string blogMLFilePath)
+        private static bool _useIdentitySeed = false;
+        private static int _identitySeed = 0;
+
+        /// <summary>
+        /// Generate the WRX File 
+        /// </summary>
+        /// <param name="blogMLFilePath">Path to the BlogML file</param>
+        /// <param name="identitySeed">If the identitySeed is set the POST ID is overridden with an incremented identitySeed</param>
+        /// <returns></returns>
+        internal static string GenerateWRXFile(string blogMLFilePath,int identitySeed=0)
         {
+
+            if (identitySeed > 0)
+            {
+                _useIdentitySeed = true;
+                _identitySeed = identitySeed;
+            }
+
             if (string.IsNullOrEmpty(blogMLFilePath))
                 throw new ArgumentNullException("blogMLFilePath", "BlogMLFilePath is mandatory parameter");
 
@@ -208,6 +224,9 @@ namespace BlogML.Helper.BlogML
             // TODO: Swap code so that all posts are processed, not just first 5.
             for (int i = 0; i <= blogData.posts.Length - 1; i++)
             {
+                if (_useIdentitySeed)
+                    _identitySeed = _identitySeed + i;
+
                 string postXml=WritePost(blogData.posts[i], blogData, baseUrl);
                 writer.WriteRaw(postXml);
             }
@@ -276,7 +295,14 @@ namespace BlogML.Helper.BlogML
                 }
                 writer.WriteCData(content);
                 writer.WriteEndElement(); // content:encoded
-                writer.WriteElementString("wp:post_id", currPost.id);
+
+                //Replace the orginal identity seed (usually a GUID depending on blog source) with an integer so we don't go over the wordpress limit of 2147483647
+                var postId = currPost.id;
+
+                if (_useIdentitySeed)
+                    postId = _identitySeed.ToString();
+
+                writer.WriteElementString("wp:post_id", postId);
                 writer.WriteElementString("wp:post_date", currPost.datecreated.ToString("yyyy-MM-dd HH:mm:ss"));
                 writer.WriteElementString("wp:post_date_gmt", currPost.datecreated.ToString("yyyy-MM-dd HH:mm:ss"));
                 writer.WriteElementString("wp:comment_status", "open");
