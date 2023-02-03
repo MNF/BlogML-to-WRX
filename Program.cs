@@ -44,7 +44,7 @@ namespace BlogML.Helper
                     case ToolAction.ExportToWRX:
                         if (RequiredParametersPrintUsage(ToolAction.ExportToWRX, args))
                         {
-                            string wrxFileName = BlogMLToWRXConverter.GenerateWRXFile(setting.BlogMLFileName);
+                            string wrxFileName = BlogMLToWRXConverter.GenerateWRXFile(setting.BlogMLFileName, setting.BlogPostIdSeed);
                             Console.WriteLine("Created WRX format");
 
                             //Generate ReDirect, SourceQA and TargetQA File
@@ -149,7 +149,7 @@ namespace BlogML.Helper
 
         private static Setting ParseInput(string[] args)
         {
-            const string validArguments = "/Action: /BlogMLFile: /WRXFile: /QASourceFile: /QATargetFile: /QAReportFile: /SourceUrl: /TargetUrl: /NewWRXWithOnlyFailedPosts:";
+            const string validArguments = "/Action: /BlogMLFile: /WRXFile: /QASourceFile: /QATargetFile: /QAReportFile: /SourceUrl: /TargetUrl: /NewWRXWithOnlyFailedPosts: /BlogPostIdSeed:";
 
             Setting setting = new Setting();
             foreach (string s in args)
@@ -191,6 +191,17 @@ namespace BlogML.Helper
 
                 if (argumentKey == "/QAREPORTFILE")
                     setting.QAReportFileName = argumentValue;
+
+                if (argumentKey == "/BLOGPOSTIDSEED")
+                {
+                    int blogIdSeed = 0;
+                    setting.BlogPostIdSeed = 0;
+
+                    if (int.TryParse(argumentValue, out blogIdSeed))
+                    {
+                        setting.BlogPostIdSeed = blogIdSeed;
+                    }
+                }
             }
 
             return setting;
@@ -231,8 +242,8 @@ namespace BlogML.Helper
                     }
                     break;
                 case ToolAction.ExportToWRX:
-                    validArguments = "/Action: /BlogMLFile: /SourceUrl: /TargetUrl:";
-                    if (args.Length != 4)
+                    validArguments = "/Action: /BlogMLFile: /SourceUrl: /TargetUrl: /BlogPostIdSeed:";
+                    if (args.Length < 4)
                     {
                         Console.WriteLine("/BlogMLFile: /SourceUrl: /TargetUrl: are mandatory");
                         return false;
@@ -300,5 +311,12 @@ namespace BlogML.Helper
         public string SourceBaseUrl { get; set; }
         public string TargetBaseUrl { get; set; }
         public string QAReportFileName { get; set; }
+
+        /// <summary>
+        /// Allows you to change the BlogPost ID Seed
+        /// 
+        /// This helps when importing large amounts of posts into WordPress
+        /// </summary>
+        public int BlogPostIdSeed { get; set; }
     }
 }
